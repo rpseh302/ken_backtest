@@ -298,6 +298,143 @@ def _chart_analysis(symbols, files, run_id, trades):
         st.info("선택한 Run과 날짜 범위에 이 심볼의 거래 기록이 없습니다.")
 
 
+
+def _json_dict_safe(value):
+    if isinstance(value, dict):
+        return value
+    try:
+        return json.loads(value or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _strategy_execution(files):
+    from dashboard.jobs import start_backtest_job, list_jobs
+
+    st.title("Strategy Execution")
+    st.caption("기존 EMA 20/50 + ATR 백테스트 엔진을 GUI에서 실행합니다.")
+    defaults = json.loads((Path(__file__).resolve().parents[1] / "config" / "ema_20_50_atr.json").read_text(encoding="utf-8"))
+    symbols = sorted(files)
+    with st.form("strategy_execution_form"):
+        st.subheader("대상 심볼")
+        selected_symbols = st.multiselect("Symbols", symbols, default=symbols)
+        st.caption(f"{len(selected_symbols)} / {len(symbols)} symbols selected")
+        st.subheader("전략 설정")
+        a, b, c = st.columns(3)
+        ema_fast = a.number_input("EMA Fast", 1, 500, int(defaults["strategy"]["ema_fast"]))
+        ema_slow = b.number_input("EMA Slow", 2, 1000, int(defaults["strategy"]["ema_slow"]))
+        atr_period = c.number_input("ATR Period", 1, 500, int(defaults["strategy"]["atr_period"]))
+        atr_mult = st.number_input("ATR Stop Multiplier", 0.1, 20.0, float(defaults["strategy"]["atr_stop_multiplier"]), step=0.1)
+        st.subheader("Portfolio & Execution")
+        a, b, c = st.columns(3)
+        capital = a.number_input("Initial Capital (USDT)", 100.0, 100000000.0, float(defaults["portfolio"]["initial_capital"]), step=100.0)
+        max_positions = b.number_input("Max Concurrent Positions", 1, 500, int(defaults["portfolio"]["max_positions"]))
+        allocation = c.number_input("Allocation per Position", 0.01, 1.0, float(defaults["portfolio"]["allocation_per_position"]), step=0.01)
+        a, b, c = st.columns(3)
+        leverage = a.number_input("Leverage", 0.1, 125.0, float(defaults["portfolio"]["leverage"]), step=0.1)
+        fee_rate = b.number_input("Taker Fee Rate", 0.0, 0.02, float(defaults["execution"]["fee_rate"]), format="%.5f")
+        slippage = c.number_input("Slippage (bps)", 0.0, 500.0, float(defaults["execution"]["slippage_bps"]), step=0.5)
+        funding = st.checkbox("Funding Rate 적용", value=bool(defaults["execution"]["funding_enabled"]))
+        st.caption("Timeframe: 1h · Margin: Isolated · LONG/SHORT: 전략 엔진 기본 동작")
+        confirmed = st.checkbox("선택한 심볼 전체에 대해 백테스트를 실행하는 것을 확인했습니다.")
+        submitted = st.form_submit_button("Start Backtest", type="primary", disabled=not selected_symbols)
+    if submitted:
+        if not confirmed:
+            st.error("실행 확인 체크박스를 선택해 주세요.")
+        elif ema_fast > ema_slow:
+            st.error("EMA Fast는 EMA Slow보다 클 수 없습니다.")
+        else:
+            config = {
+                "strategy": {"name":"ema_20_50_atr","timeframe":"1h","ema_fast":int(ema_fast),"ema_slow":int(ema_slow),"atr_period":int(atr_period),"atr_stop_multiplier":float(atr_mult)},
+                "portfolio": {"initial_capital":float(capital),"max_positions":int(max_positions),"allocation_per_position":float(allocation),"leverage":float(leverage),"margin_mode":"isolated"},
+                "execution": {"fee_type":"taker","fee_rate":float(fee_rate),"slippage_bps":float(slippage),"funding_enabled":bool(funding)},
+                "risk": defaults.get("risk", {})
+            }
+            try:
+                job = start_backtest_job(DATA_ROOT, DB_PATH, DATA_ROOT / "reports", config, selected_symbols)
+                st.success(f"백테스트 작업을 시작했습니다. Job ID: {job['job_id']}")
+            except Exception as exc:
+                st.error(f"작업 시작 실패: {exc}")
+    st.subheader("실행 작업 현황")
+    jobs = list_jobs(DATA_ROOT)
+    if jobs:
+        st.dataframe(pd.DataFrame([{
+            "Job ID": x.get("job_id"), "Status": x.get("status"),
+            "Started (UTC)": x.get("started_at"), "Completed (UTC)": x.get("completed_at"),
+            "Run ID": x.get("run_id"), "Error": x.get("error")
+        } for x in jobs]), use_container_width=True, hide_index=True)
+        if st.button("작업 상태 새로고침"):
+            st.rerun()
+        selected_job = st.selectbox("작업 로그 보기", [x["job_id"] for x in jobs])
+        item = next(x for x in jobs if x["job_id"] == selected_job)
+        log_path = Path(item.get("log_path", ""))
+        if log_path.is_file():
+            with st.expander("Worker log"):
+                st.code(log_path.read_text(encoding="utf-8", errors="replace")[-12000:])
+    else:
+        st.info("GUI에서 시작한 작업이 없습니다.")
+
+
+def _test_records(runs, files):
+    st.title("Test Records")
+    st.caption("백테스트 실행 이력 · 결과 비교 · 상세 기록")
+    if runs.empty:
+        st.info("저장된 백테스트 기록이 없습니다. Strategy Execution에서 첫 실행을 시작하세요.")
+        return
+    frame = runs.copy()
+    frame["label"] = frame.apply(_run_label, axis=1)
+    statuses = sorted(frame["status"].fillna("UNKNOWN").astype(str).unique())
+    chosen_statuses = st.multiselect("상태 필터", statuses, default=statuses)
+    filtered = frame[frame["status"].fillna("UNKNOWN").astype(str).isin(chosen_statuses)].copy()
+    st.metric("저장된 실행 기록", len(filtered))
+    display = filtered.copy()
+    display["Started (UTC)"] = pd.to_datetime(display["started_at_ms"], unit="ms", utc=True, errors="coerce")
+    display["Total Return"] = display["metrics"].map(lambda m: _fmt(m.get("total_return"), pct=True) if isinstance(m, dict) else "—")
+    display["Net PnL (USDT)"] = display["metrics"].map(lambda m: _fmt(m.get("final_equity", 0) - m.get("initial_capital", 0)) if isinstance(m, dict) else "—")
+    display["Trades"] = display["metrics"].map(lambda m: m.get("total_trades", 0) if isinstance(m, dict) else 0)
+    st.dataframe(display[["label","status","Started (UTC)","Total Return","Net PnL (USDT)","Trades","run_id"]], use_container_width=True, hide_index=True)
+    completed = filtered[filtered["status"].astype(str).str.upper() == "COMPLETED"]
+    if completed.empty:
+        return
+    labels = completed["label"].tolist()
+    selected_labels = st.multiselect("비교할 Run 선택 (복수 선택)", labels, default=labels[:min(2,len(labels))])
+    if selected_labels:
+        rows=[]
+        for _, row in completed[completed["label"].isin(selected_labels)].iterrows():
+            m=row.get("metrics",{}) if isinstance(row.get("metrics"),dict) else {}
+            rows.append({"Run":row["label"],"Initial Capital":m.get("initial_capital"),"Final Equity":m.get("final_equity"),
+                         "Total Return":m.get("total_return"),"Max Drawdown":m.get("maximum_drawdown"),
+                         "Sharpe":m.get("sharpe_ratio"),"Profit Factor":m.get("profit_factor"),
+                         "Win Rate":m.get("win_rate"),"Trades":m.get("total_trades"),
+                         "Fees":m.get("total_fees"),"Funding PnL":m.get("total_funding_pnl")})
+        st.subheader("Run 비교")
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    selected_label=st.selectbox("상세 기록 열기",labels,key="record_detail_run")
+    selected_run=completed.loc[completed["label"]==selected_label].iloc[0]
+    run_id=str(selected_run["run_id"])
+    trades,equity=read_run_frames(DATA_ROOT,run_id,DB_PATH)
+    metrics=selected_run.get("metrics",{}) if isinstance(selected_run.get("metrics"),dict) else {}
+    st.subheader("Run 상세")
+    cols=st.columns(4)
+    for col,(label,key,pct) in zip(cols,[("Total Return","total_return",True),("Final Equity","final_equity",False),("Max Drawdown","maximum_drawdown",True),("Total Trades","total_trades",False)]):
+        col.metric(label,_fmt(metrics.get(key),pct=pct) if key!="total_trades" else str(metrics.get(key,len(trades))))
+    with st.expander("실행 파라미터"):
+        st.json(_json_dict_safe(selected_run.get("parameters_json","{}")))
+    with st.expander("저장된 보고서 파일"):
+        folder=DATA_ROOT/"reports"/"backtests"/run_id
+        if folder.is_dir():
+            st.write("\n".join(p.name for p in sorted(folder.iterdir()) if p.is_file()))
+            st.code(str(folder))
+        else:
+            st.info("보고서 파일 폴더가 없습니다. DuckDB 기록은 별도로 조회할 수 있습니다.")
+    if not trades.empty:
+        st.subheader("Trades")
+        st.dataframe(trades,use_container_width=True,hide_index=True)
+    if not equity.empty:
+        st.subheader("Equity Curve")
+        _equity_chart(equity)
+
+
 st.sidebar.title("KEN BACKTEST")
 page = st.sidebar.radio("Workspace", ["Overview", "Chart Analysis", "Strategy Execution", "Test Records"], label_visibility="collapsed")
 files = discover_market_files(DATA_ROOT)
