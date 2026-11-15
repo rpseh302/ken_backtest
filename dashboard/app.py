@@ -107,6 +107,8 @@ def _chart_analysis(symbols, files, run_id, trades):
     overlay = controls[2].checkbox("EMA overlays", value=True)
     try:
         candles = read_candles(files[symbol][timeframe])
+        if overlay and timeframe == "1h":
+            candles = add_chart_indicators(candles)
     except Exception as exc:
         st.error(f"캔들 파일을 읽을 수 없습니다: {exc}")
         return
@@ -123,8 +125,6 @@ def _chart_analysis(symbols, files, run_id, trades):
         return
     max_bars = st.slider("표시할 최근 봉 수", min_value=1, max_value=min(5000, len(candles)), value=min(500, len(candles)), step=1)
     candles = candles.tail(max_bars).copy()
-    if overlay and timeframe == "1h":
-        candles = add_chart_indicators(candles)
     fig = go.Figure(go.Candlestick(x=candles["datetime"], open=candles["open"], high=candles["high"], low=candles["low"], close=candles["close"], name=symbol))
     if overlay and timeframe == "1h":
         fig.add_trace(go.Scatter(x=candles["datetime"], y=candles["ema_fast"], name="EMA 20", line=dict(color="#FBBF24", width=1.4)))
