@@ -81,6 +81,32 @@ def _overview(runs, selected_run, trades, equity):
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("거래 데이터가 없습니다.")
+    st.subheader("Drawdown")
+    if not equity.empty and "drawdown" in equity and "timestamp_ms" in equity:
+        dd = equity.copy()
+        dd["time"] = pd.to_datetime(dd["timestamp_ms"], unit="ms", utc=True)
+        fig = go.Figure(go.Scatter(x=dd["time"], y=dd["drawdown"], fill="tozeroy", name="Drawdown", line=dict(color="#EF4444", width=1.5)))
+        fig.update_layout(template="plotly_dark", paper_bgcolor="#111827", plot_bgcolor="#0F172A", height=220, margin=dict(l=10,r=10,t=10,b=10), yaxis_tickformat=".1%")
+        st.plotly_chart(fig, use_container_width=True)
+    if not trades.empty and {"net_pnl", "exit_time_ms"}.issubset(trades.columns):
+        closed = trades.dropna(subset=["net_pnl", "exit_time_ms"]).copy()
+        if not closed.empty:
+            closed["month"] = pd.to_datetime(closed["exit_time_ms"], unit="ms", utc=True).dt.strftime("%Y-%m")
+            monthly = closed.groupby("month", as_index=False)["net_pnl"].sum()
+            by_symbol = closed.groupby("symbol", as_index=False)["net_pnl"].sum().sort_values("net_pnl") if "symbol" in closed else pd.DataFrame()
+            left, right = st.columns(2)
+            with left:
+                st.subheader("Monthly Net PnL")
+                fig = go.Figure(go.Bar(x=monthly["month"], y=monthly["net_pnl"], marker_color=["#22C55E" if x >= 0 else "#EF4444" for x in monthly["net_pnl"]]))
+                fig.update_layout(template="plotly_dark", paper_bgcolor="#111827", plot_bgcolor="#0F172A", height=300, margin=dict(l=10,r=10,t=10,b=10), yaxis_title="USDT")
+                st.plotly_chart(fig, use_container_width=True)
+            with right:
+                st.subheader("Symbol Contribution")
+                if not by_symbol.empty:
+                    fig = go.Figure(go.Bar(x=by_symbol["net_pnl"], y=by_symbol["symbol"], orientation="h", marker_color=["#22C55E" if x >= 0 else "#EF4444" for x in by_symbol["net_pnl"]]))
+                    fig.update_layout(template="plotly_dark", paper_bgcolor="#111827", plot_bgcolor="#0F172A", height=300, margin=dict(l=10,r=10,t=10,b=10), xaxis_title="Net PnL (USDT)")
+                    st.plotly_chart(fig, use_container_width=True)
+
     st.subheader("Trading Cost & PnL")
     cost_cols = st.columns(4)
     for col, label, key in zip(cost_cols, ["Gross PnL", "Fees", "Funding PnL", "Slippage Cost"], ["gross_pnl", "total_fees", "total_funding_pnl", "total_slippage_cost"]):
