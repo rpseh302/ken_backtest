@@ -125,3 +125,22 @@ Phase 1은 데이터 엔진만 포함하며 매매·백테스트 로직은 구�
 ```powershell
 python -m unittest -v
 ```
+
+## USDⓈ-M 무기한 계약 펀딩비 수집
+
+OHLCV 캔들에는 펀딩비가 포함되지 않습니다. 이미 내려받은 Parquet의 심볼별
+실제 최초 `open_time`부터 최종 `close_time`까지를 읽어, Binance USDⓈ-M
+Futures API의 `/fapi/v1/fundingRate`에서 펀딩비를 별도로 수집할 수 있습니다.
+이 수집은 캔들 파일을 수정하거나 병합하지 않습니다.
+
+```powershell
+python -X utf8 collect_funding_rates.py --data-root data --workers 4
+```
+
+수집 대상 중 `PERPETUAL` 계약만 API로 조회합니다. 분기·납기 계약 등
+비무기한 계약은 펀딩비가 없으므로 `data\funding_rate_report.json`의
+`skipped_non_perpetual_symbols`에 기록합니다. 심볼별 원본 응답은
+`data\raw\futures\um\funding_rate\<심볼>.json`, 정규화된 별도 Parquet는
+`data\parquet\<심볼>\funding_rate.parquet`에 저장됩니다. 출력 Parquet에는
+`symbol`, `funding_time`, `funding_time_ms`, `funding_rate`, `mark_price`,
+`rate_type`, `source_url`이 포함됩니다.
