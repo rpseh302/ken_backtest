@@ -299,29 +299,35 @@ def _chart_analysis(symbols, files, run_id, trades):
 
 
 st.sidebar.title("KEN BACKTEST")
-page = st.sidebar.radio("Workspace", ["Overview", "Chart Analysis"], label_visibility="collapsed")
+page = st.sidebar.radio("Workspace", ["Overview", "Chart Analysis", "Strategy Execution", "Test Records"], label_visibility="collapsed")
 files = discover_market_files(DATA_ROOT)
 runs = read_runs(DATA_ROOT, DB_PATH)
-if not files:
+if page == "Strategy Execution":
+    if not files:
+        st.error(f"Parquet 데이터를 찾지 못했습니다: {DATA_ROOT / 'parquet'}")
+    else:
+        _strategy_execution(files)
+elif page == "Test Records":
+    _test_records(runs, files)
+elif not files:
     st.error(f"Parquet 데이터를 찾지 못했습니다: {DATA_ROOT / 'parquet'}")
-    st.stop()
-if runs.empty:
+elif runs.empty:
     st.sidebar.info("완료된 Backtest Run이 없습니다.")
     if page == "Overview":
         st.title("Overview")
-        st.info("백테스트 결과가 아직 없습니다. 로컬에서 백테스트를 실행하면 KPI와 거래 분석이 표시됩니다.")
+        st.info("아직 백테스트 결과가 없습니다. Strategy Execution에서 실행할 수 있습니다.")
         st.metric("Available Symbols", len(files))
         st.write("사용 가능한 심볼: " + ", ".join(sorted(files)))
     else:
         _chart_analysis(sorted(files), files, None, pd.DataFrame())
-    st.stop()
-runs = runs.copy()
-runs["label"] = runs.apply(_run_label, axis=1)
-selected_label = st.sidebar.selectbox("Backtest Run", runs["label"].tolist())
-selected_run = runs.loc[runs["label"] == selected_label].iloc[0]
-run_id = str(selected_run["run_id"])
-trades, equity = read_run_frames(DATA_ROOT, run_id, DB_PATH)
-if page == "Overview":
-    _overview(runs, selected_run, trades, equity)
 else:
-    _chart_analysis(sorted(files), files, run_id, trades)
+    runs = runs.copy()
+    runs["label"] = runs.apply(_run_label, axis=1)
+    selected_label = st.sidebar.selectbox("Backtest Run", runs["label"].tolist())
+    selected_run = runs.loc[runs["label"] == selected_label].iloc[0]
+    run_id = str(selected_run["run_id"])
+    trades, equity = read_run_frames(DATA_ROOT, run_id, DB_PATH)
+    if page == "Overview":
+        _overview(runs, selected_run, trades, equity)
+    else:
+        _chart_analysis(sorted(files), files, run_id, trades)

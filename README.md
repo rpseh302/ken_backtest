@@ -195,3 +195,19 @@ Dashboard data tests:
 ```powershell
 python -m unittest -v test_dashboard_data
 ```
+
+
+## Backtest Operations GUI
+
+The dashboard also includes **Strategy Execution** and **Test Records**:
+- Strategy Execution launches the existing CLI backtest engine in a detached worker process, with editable EMA/ATR, portfolio, fee, slippage, funding, and symbol-universe settings.
+- Worker status and logs are stored under `data/reports/gui_jobs/<job-id>/`; completed runs continue to use the standard DuckDB and `data/reports/backtests/<run-id>/` outputs.
+- Test Records lists saved runs, compares selected completed runs, and displays parameters, trades, and equity curves.
+- The GUI does not delete historical runs. Existing source Parquet files are read by the engine and are not modified by this interface.
+
+Launch with:
+
+```powershell
+$env:PYTHONPATH = (Get-Location).Path
+python -m streamlit run dashboard/app.py
+```
