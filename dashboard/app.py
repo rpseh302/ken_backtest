@@ -155,8 +155,12 @@ def _chart_analysis(symbols, files, run_id, trades):
     if overlay and timeframe == "1h":
         fig.add_trace(go.Scatter(x=candles["datetime"], y=candles["ema_fast"], name="EMA 20", line=dict(color="#FBBF24", width=1.4)))
         fig.add_trace(go.Scatter(x=candles["datetime"], y=candles["ema_slow"], name="EMA 50", line=dict(color="#60A5FA", width=1.4)))
-    symbol_trades = trades[trades["symbol"] == symbol].copy() if not trades.empty and "symbol" in trades else pd.DataFrame()
+    symbol_trades = trades[trades["symbol"] == symbol].copy().reset_index(drop=True) if not trades.empty and "symbol" in trades else pd.DataFrame()
+    selected_trade = None
     if not symbol_trades.empty:
+        labels = [f"{row.get('direction', '')} · {pd.to_datetime(row.get('entry_time_ms'), unit='ms', utc=True).strftime('%Y-%m-%d %H:%M')} · {str(row.get('trade_id', index))[:8]}" for index, row in symbol_trades.iterrows()]
+        selected_index = st.selectbox("Trade focus", range(len(labels)), format_func=lambda index: labels[index])
+        selected_trade = symbol_trades.iloc[selected_index]
         for _, trade in symbol_trades.iterrows():
             entry_time = pd.to_datetime(trade.get("entry_time_ms"), unit="ms", utc=True, errors="coerce")
             exit_time = pd.to_datetime(trade.get("exit_time_ms"), unit="ms", utc=True, errors="coerce")
@@ -171,6 +175,16 @@ def _chart_analysis(symbols, files, run_id, trades):
     st.plotly_chart(fig, use_container_width=True)
     if symbol == "ABBVUSDT":
         st.caption("ABBVUSDT는 무기한계약이 아니므로 펀딩비가 적용되지 않습니다.")
+    if selected_trade is not None:
+        st.subheader("Selected Trade Details")
+        detail_cols = st.columns(5)
+        detail_values = [("Direction", selected_trade.get("direction", "—")),
+                         ("Net PnL", _fmt(selected_trade.get("net_pnl"), " USDT")),
+                         ("Gross PnL", _fmt(selected_trade.get("gross_pnl"), " USDT")),
+                         ("Funding PnL", _fmt(selected_trade.get("funding_pnl"), " USDT")),
+                         ("Exit Reason", selected_trade.get("exit_reason", "—"))]
+        for col, (label, value) in zip(detail_cols, detail_values):
+            col.metric(label, value)
     if not symbol_trades.empty:
         st.subheader("Selected Symbol Trades")
         view = symbol_trades.copy()
