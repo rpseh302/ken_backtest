@@ -166,3 +166,32 @@ python -X utf8 collect_funding_rates.py --data-root data --workers 4
 `data\parquet\<심볼>\funding_rate.parquet`에 저장됩니다. 출력 Parquet에는
 `symbol`, `funding_time`, `funding_time_ms`, `funding_rate`, `mark_price`,
 `rate_type`, `source_url`이 포함됩니다.
+
+## Read-only Backtest GUI (Overview / Chart Analysis)
+
+Install the dashboard dependencies and launch the local GUI:
+
+```powershell
+python -m pip install -r requirements.txt
+streamlit run dashboard/app.py
+```
+
+The GUI reads candle Parquet files from `data\\parquet\\<symbol>\\`, completed runs from
+`data\\backtester.duckdb` (read-only) and, when the database is unavailable, the
+CSV/JSON artifacts under `data\\reports\\backtests\\<run-id>\\`. It does not
+run a backtest, migrate or write to DuckDB, or modify source market data.
+
+Optional environment variables:
+- `KEN_BACKTEST_DATA_ROOT`: data directory (default: `data`)
+- `KEN_BACKTEST_DB_PATH`: DuckDB file (default: `<data-root>/backtester.duckdb`)
+
+The two views are Overview and Chart Analysis. Chart overlays reuse the strategy's
+EMA/ATR indicator implementation on the selected 1h candles. ABBVUSDT is treated as
+a non-perpetual instrument; missing funding-rate data is expected and is not reported
+as a data-quality error.
+
+Dashboard data tests:
+
+```powershell
+python -m unittest -v test_dashboard_data
+```
