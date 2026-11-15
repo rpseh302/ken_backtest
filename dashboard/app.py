@@ -179,7 +179,7 @@ def _chart_analysis(symbols, files, run_id, trades):
     summary = summarize_symbol_pnl(date_trades)
     summary_map = summary.set_index("symbol").to_dict("index") if not summary.empty else {}
     show_no_trade = st.checkbox("거래가 없는 심볼 숨기기", value=True)
-    sort_order = st.selectbox("심볼 정렬", ["높은 수익 순위", "낮은 수익 순위"], horizontal=True)
+    sort_order = st.selectbox("심볼 정렬", ["높은 수익 순위", "낮은 수익 순위"])
 
     ranked_symbols = list(symbols)
     if show_no_trade:
