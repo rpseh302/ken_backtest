@@ -6,7 +6,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from dashboard.data import discover_market_files, read_candles
+from dashboard.data import discover_market_files, read_candles, summarize_symbol_pnl
 
 
 class DashboardDataTests(unittest.TestCase):
@@ -32,6 +32,21 @@ class DashboardDataTests(unittest.TestCase):
             self.assertEqual(len(result), 2)
             self.assertEqual(result.iloc[0]["close"], 11.0)
             self.assertEqual(str(result.iloc[0]["datetime"].tz), "UTC")
+
+    def test_summarizes_realized_net_pnl_by_symbol(self):
+        trades = pd.DataFrame({
+            "symbol": ["BTCUSDT", "BTCUSDT", "ETHUSDT"],
+            "net_pnl": [12.5, -2.5, 7.0],
+        })
+        result = summarize_symbol_pnl(trades).set_index("symbol")
+        self.assertEqual(result.loc["BTCUSDT", "net_pnl"], 10.0)
+        self.assertEqual(result.loc["BTCUSDT", "trade_count"], 2)
+        self.assertEqual(result.loc["ETHUSDT", "net_pnl"], 7.0)
+
+    def test_empty_trade_summary_is_empty(self):
+        result = summarize_symbol_pnl(pd.DataFrame())
+        self.assertEqual(list(result.columns), ["symbol", "net_pnl", "trade_count"])
+        self.assertTrue(result.empty)
 
 
 if __name__ == "__main__":

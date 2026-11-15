@@ -158,3 +158,23 @@ def add_chart_indicators(candles: pd.DataFrame, fast: int = 20, slow: int = 50, 
         if expected:
             frame["segment_index"] = (diffs.ne(expected) & diffs.notna()).cumsum()
     return add_segment_indicators(frame, fast, slow, atr)
+
+
+def summarize_symbol_pnl(trades: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate realized net PnL and closed-trade counts by symbol."""
+    columns = ["symbol", "net_pnl", "trade_count"]
+    if trades.empty or not {"symbol", "net_pnl"}.issubset(trades.columns):
+        return pd.DataFrame(columns=columns)
+    frame = trades.dropna(subset=["symbol", "net_pnl"]).copy()
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+    frame["net_pnl"] = pd.to_numeric(frame["net_pnl"], errors="coerce")
+    frame = frame.dropna(subset=["net_pnl"])
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+    return (
+        frame.groupby("symbol", as_index=False)
+        .agg(net_pnl=("net_pnl", "sum"), trade_count=("net_pnl", "count"))
+        .sort_values(["net_pnl", "symbol"], ascending=[False, True])
+        .reset_index(drop=True)
+    )
