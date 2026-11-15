@@ -113,7 +113,15 @@ def _chart_analysis(symbols, files, run_id, trades):
     if candles.empty:
         st.warning("선택한 데이터셋에 캔들이 없습니다.")
         return
-    max_bars = st.slider("표시할 최근 봉 수", min_value=100, max_value=max(100, min(5000, len(candles))), value=min(500, len(candles)), step=100)
+    first_day, last_day = candles["datetime"].min().date(), candles["datetime"].max().date()
+    selected_days = st.date_input("Date range (UTC)", value=(first_day, last_day), min_value=first_day, max_value=last_day)
+    if isinstance(selected_days, tuple) and len(selected_days) == 2:
+        start_day, end_day = selected_days
+        candles = candles[(candles["datetime"].dt.date >= start_day) & (candles["datetime"].dt.date <= end_day)].copy()
+    if candles.empty:
+        st.warning("선택한 기간에 캔들이 없습니다.")
+        return
+    max_bars = st.slider("표시할 최근 봉 수", min_value=1, max_value=min(5000, len(candles)), value=min(500, len(candles)), step=1)
     candles = candles.tail(max_bars).copy()
     if overlay and timeframe == "1h":
         candles = add_chart_indicators(candles)
