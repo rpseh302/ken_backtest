@@ -148,14 +148,9 @@ def _chart_analysis(symbols, files, run_id, trades):
             st.warning("표시할 시장 데이터가 없습니다.")
             return
 
-    timeframe_options = sorted(
-        {tf for symbol_name in symbols for tf in files.get(symbol_name, {})},
-        key=lambda value: ["1m", "5m", "15m", "1h", "4h"].index(value),
-    )
-    top = st.columns([1, 1, 1.5])
-    timeframe = top[0].selectbox("Timeframe", timeframe_options, index=timeframe_options.index("1h") if "1h" in timeframe_options else 0)
-    overlay = top[1].checkbox("EMA overlays", value=True)
-    traded_period_only = top[2].checkbox("거래 구간만 보기", value=True)
+    top = st.columns([1, 1])
+    overlay = top[0].checkbox("EMA overlays", value=True)
+    traded_period_only = top[1].checkbox("거래 구간만 보기", value=True)
 
     selected_days = st.date_input(
         "Date range (UTC)", value=(default_start, default_end),
@@ -208,6 +203,8 @@ def _chart_analysis(symbols, files, run_id, trades):
             )
     symbol_trades = date_trades[date_trades["symbol"] == symbol].copy().reset_index(drop=True)
     with right:
+        intervals = sorted(files[symbol], key=lambda value: ["1m", "5m", "15m", "1h", "4h"].index(value))
+        timeframe = st.selectbox("Timeframe", intervals, index=intervals.index("1h") if "1h" in intervals else 0)
         st.caption(
             f"선택 심볼 실현 순손익: {_fmt(summary_map.get(symbol, {}).get('net_pnl', 0.0), ' USDT')} "
             f"· 거래 {int(summary_map.get(symbol, {}).get('trade_count', 0))}건"
