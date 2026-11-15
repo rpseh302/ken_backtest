@@ -48,11 +48,18 @@ def start_backtest_job(data_root, db_path, report_dir, config, symbols):
         process = subprocess.Popen(command, **kwargs)
     finally:
         log_handle.close()
-    state["worker_pid"] = process.pid
-    state["status"] = "RUNNING"
-    state["started_at"] = _utc_now()
-    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    return state
+    # The worker may update job.json immediately after it starts. Merge the PID
+    # into the latest state instead of overwriting a fast completion/failure.
+    try:
+        latest = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        latest = state
+    latest["worker_pid"] = process.pid
+    if latest.get("status") == "QUEUED":
+        latest["status"] = "RUNNING"
+        latest["started_at"] = _utc_now()
+    state_path.write_text(json.dumps(latest, ensure_ascii=False, indent=2), encoding="utf-8")
+    return latest
 
 
 def list_jobs(data_root, limit=30):
