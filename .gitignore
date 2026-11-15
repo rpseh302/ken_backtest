@@ -12,6 +12,7 @@ __pycache__/
 !/data/raw/
 !/data/raw/futures/
 !/data/raw/futures/um/
+/data/raw/futures/um/*
 !/data/raw/futures/um/daily/
 !/data/raw/futures/um/daily/klines/
 /data/raw/futures/um/daily/klines/*
