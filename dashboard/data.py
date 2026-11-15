@@ -33,7 +33,8 @@ def _column_map(names) -> dict[str, str]:
 def _to_epoch_ms(values: pd.Series) -> pd.Series:
     if pd.api.types.is_datetime64_any_dtype(values):
         parsed = pd.to_datetime(values, utc=True, errors="coerce")
-        return parsed.astype("int64") // 1_000_000
+        converted = parsed.astype("int64") // 1_000_000
+        return converted.where(parsed.notna())
     numeric = pd.to_numeric(values, errors="coerce")
     sample = numeric.dropna()
     if sample.empty:
