@@ -41,8 +41,50 @@ def migrate(connection):
     }
     if "peak_memory_bytes" not in run_columns:
         connection.execute("ALTER TABLE data_quality_runs ADD COLUMN peak_memory_bytes BIGINT")
+    additions = {
+        "backtest_runs": {
+            "metrics_json": "VARCHAR DEFAULT '{}'",
+        },
+        "trades": {
+            "entry_signal_time_ms": "BIGINT",
+            "entry_notional": "DOUBLE",
+            "initial_atr": "DOUBLE",
+            "initial_stop_price": "DOUBLE",
+            "segment_index": "INTEGER",
+            "entry_fee": "DOUBLE",
+            "funding_pnl": "DOUBLE",
+            "entry_slippage_cost": "DOUBLE",
+            "exit_reason": "VARCHAR",
+            "gross_pnl": "DOUBLE",
+            "exit_fee": "DOUBLE",
+            "slippage_cost": "DOUBLE",
+            "net_pnl": "DOUBLE",
+            "return_on_notional": "DOUBLE",
+            "holding_duration_ms": "BIGINT",
+        },
+        "equity_curve": {
+            "cash": "DOUBLE",
+            "available_balance": "DOUBLE",
+            "unrealized_pnl": "DOUBLE",
+            "realized_pnl": "DOUBLE",
+            "open_positions": "INTEGER",
+            "long_exposure": "DOUBLE",
+            "short_exposure": "DOUBLE",
+            "total_exposure": "DOUBLE",
+            "used_margin": "DOUBLE",
+            "total_fees": "DOUBLE",
+            "funding_pnl": "DOUBLE",
+            "slippage_cost": "DOUBLE",
+            "drawdown": "DOUBLE",
+        },
+    }
+    for table, columns in additions.items():
+        present = {row[1] for row in connection.execute(f"PRAGMA table_info('{table}')").fetchall()}
+        for column, definition in columns.items():
+            if column not in present:
+                connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     connection.execute(
-        "INSERT INTO schema_migrations VALUES (2, ?) ON CONFLICT DO NOTHING",
+        "INSERT INTO schema_migrations VALUES (3, ?) ON CONFLICT DO NOTHING",
         [now_ms()],
     )
     connection.execute(

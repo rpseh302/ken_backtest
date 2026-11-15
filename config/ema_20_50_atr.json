@@ -1,0 +1,28 @@
+{
+  "strategy": {
+    "name": "ema_20_50_atr",
+    "timeframe": "1h",
+    "ema_fast": 20,
+    "ema_slow": 50,
+    "atr_period": 14,
+    "atr_stop_multiplier": 2.0
+  },
+  "portfolio": {
+    "initial_capital": 10000.0,
+    "max_positions": 10,
+    "allocation_per_position": 0.1,
+    "leverage": 1.0,
+    "margin_mode": "isolated"
+  },
+  "execution": {
+    "fee_type": "taker",
+    "fee_rate": 0.0004,
+    "slippage_bps": 2.0,
+    "funding_enabled": true
+  },
+  "risk": {
+    "stop_loss_enabled": true,
+    "take_profit_enabled": false,
+    "trailing_stop_enabled": false
+  }
+}

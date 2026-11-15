@@ -11,6 +11,8 @@ from .quality_reporter import (
 )
 from .registry import connect
 from .validation_runner import validate
+from ..strategy.config import load_config
+from ..strategy.runner import execute_backtest
 
 
 LOGGER = logging.getLogger("backtester")
@@ -34,6 +36,15 @@ def _parser():
             command.add_argument("--abs-tolerance", type=float, default=1e-12)
             command.add_argument("--rel-tolerance", type=float, default=1e-9)
             command.add_argument("--force", action="store_true")
+    backtest = groups.add_parser("backtest", help="run a configured strategy backtest")
+    backtest.add_argument("--strategy", required=True, choices=("ema_20_50_atr",))
+    backtest.add_argument("--config", type=Path, default=Path("config/ema_20_50_atr.json"))
+    backtest.add_argument("--symbols", nargs="+")
+    backtest.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
+    backtest.add_argument("--db", type=Path)
+    backtest.add_argument("--report-dir", type=Path)
+    backtest.add_argument("--memory-limit", default="4GB")
+    backtest.add_argument("--threads", type=int, default=4)
     return parser
 
 
@@ -80,6 +91,12 @@ def main(argv=None):
     report_dir = args.report_dir or root / DEFAULT_REPORT_ROOT.name
     connection = connect(db_path, args.memory_limit, args.threads)
     try:
+        if args.group == "backtest":
+            config = load_config(args.config)
+            if config.name != args.strategy:
+                raise ValueError(f"Configuration strategy {config.name!r} does not match --strategy")
+            _json_print(execute_backtest(connection, root, report_dir, config, args.symbols))
+            return 0
         if args.command == "status":
             _json_print(_status(connection))
             return 0

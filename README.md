@@ -126,6 +126,28 @@ Phase 1은 데이터 엔진만 포함하며 매매·백테스트 로직은 구�
 python -m unittest -v
 ```
 
+## EMA 20/50 + ATR 백테스트
+
+`ema_20_50_atr`는 검증된 1시간 봉과 커버리지 세그먼트만 사용합니다. EMA 20/50과
+Wilder ATR 14는 각 연속 세그먼트에서 독립적으로 초기화되며, 신호는 봉 마감 후
+계산하고 다음 봉 시가에 체결합니다. 초기 ATR 스톱, 불리한 슬리피지, taker 수수료,
+펀딩비 및 포트폴리오 한도를 적용합니다.
+
+기본 설정은 [`config/ema_20_50_atr.json`](config/ema_20_50_atr.json)에 있으며,
+수수료·슬리피지·자본·배분·레버리지 등은 여기서 변경합니다.
+
+```powershell
+python -m backtester backtest --strategy ema_20_50_atr `
+  --symbols BTCUSDT ETHUSDT ABBVUSDT FRHCUSDT
+```
+
+결과는 `data\reports\backtests\<run-id>\` 아래의 `trades.csv`,
+`equity_curve.csv`, 심볼·방향·월·분기별 CSV 및 `performance.json`에 저장됩니다.
+동시에 DuckDB의 `backtest_runs`, `trades`, `equity_curve`에도 기록됩니다.
+세그먼트 경계에서 열린 포지션은 가격을 만들지 않고 `DATA_INVALIDATION`으로
+명시 종료합니다. 자세한 이벤트 순서는
+[`docs/ema_20_50_atr_architecture.md`](docs/ema_20_50_atr_architecture.md)를 참고하세요.
+
 ## USDⓈ-M 무기한 계약 펀딩비 수집
 
 OHLCV 캔들에는 펀딩비가 포함되지 않습니다. 이미 내려받은 Parquet의 심볼별
