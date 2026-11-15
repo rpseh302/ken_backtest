@@ -309,10 +309,19 @@ def _json_dict_safe(value):
 
 
 def _strategy_execution(files):
-    from dashboard.jobs import start_backtest_job, list_jobs
+    from dashboard.jobs import start_backtest_job, list_jobs, get_backtest_readiness
 
     st.title("Strategy Execution")
     st.caption("기존 EMA 20/50 + ATR 백테스트 엔진을 GUI에서 실행합니다.")
+    readiness = get_backtest_readiness(DB_PATH)
+    if readiness["ready"]:
+        st.success(f"1h 데이터 준비 완료 · 대상 가능 심볼 {readiness['symbols']}개 · 연속 구간 {readiness['segments']:,}개")
+    else:
+        st.warning(readiness["reason"] + " 데이터 검증 전에는 백테스트를 실행할 수 없습니다.")
+    current_jobs = list_jobs(DATA_ROOT)
+    active_job = any(item.get("status") in ("QUEUED", "RUNNING") for item in current_jobs)
+    if active_job:
+        st.info("이미 실행 중인 백테스트가 있습니다. DuckDB 동시 쓰기를 방지하기 위해 완료 후 새 실행을 시작할 수 있습니다.")
     defaults = json.loads((Path(__file__).resolve().parents[1] / "config" / "ema_20_50_atr.json").read_text(encoding="utf-8"))
     symbols = sorted(files)
     with st.form("strategy_execution_form"):
@@ -337,7 +346,7 @@ def _strategy_execution(files):
         funding = st.checkbox("Funding Rate 적용", value=bool(defaults["execution"]["funding_enabled"]))
         st.caption("Timeframe: 1h · Margin: Isolated · LONG/SHORT: 전략 엔진 기본 동작")
         confirmed = st.checkbox("선택한 심볼 전체에 대해 백테스트를 실행하는 것을 확인했습니다.")
-        submitted = st.form_submit_button("Start Backtest", type="primary", disabled=not selected_symbols)
+        submitted = st.form_submit_button("Start Backtest", type="primary", disabled=(not selected_symbols or not readiness["ready"] or active_job))
     if submitted:
         if not confirmed:
             st.error("실행 확인 체크박스를 선택해 주세요.")

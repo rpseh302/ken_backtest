@@ -71,3 +71,35 @@ def list_jobs(data_root, limit=30):
         except (OSError, json.JSONDecodeError):
             continue
     return sorted(jobs, key=lambda item: item.get("created_at", ""), reverse=True)[:limit]
+
+
+def get_backtest_readiness(db_path):
+    """Return validated 1h-universe readiness without modifying the database."""
+    import duckdb
+    database = Path(db_path)
+    if not database.is_file():
+        return {"ready": False, "symbols": 0, "segments": 0,
+                "reason": "DuckDB 카탈로그가 없습니다. 먼저 데이터 discover 및 validate를 실행하세요."}
+    try:
+        con = duckdb.connect(str(database), read_only=True)
+        try:
+            tables = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
+            required = {"symbol_data_coverage", "coverage_segments"}
+            if not required.issubset(tables):
+                return {"ready": False, "symbols": 0, "segments": 0,
+                        "reason": "데이터 검증 테이블이 없습니다. 먼저 python -m backtester data validate를 실행하세요."}
+            symbols = con.execute(
+                "SELECT count(DISTINCT symbol) FROM symbol_data_coverage "
+                "WHERE timeframe='1h' AND eligibility IN ('VALID','PARTIAL')"
+            ).fetchone()[0]
+            segments = con.execute(
+                "SELECT count(*) FROM coverage_segments WHERE timeframe='1h'"
+            ).fetchone()[0]
+            ready = int(symbols) > 0 and int(segments) > 0
+            return {"ready": ready, "symbols": int(symbols), "segments": int(segments),
+                    "reason": None if ready else "1h 유효 데이터 세그먼트가 없습니다. 데이터 검증을 완료하세요."}
+        finally:
+            con.close()
+    except Exception as exc:
+        return {"ready": False, "symbols": 0, "segments": 0,
+                "reason": f"DuckDB readiness 확인 실패: {exc}"}
