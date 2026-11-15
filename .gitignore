@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+/data/
+/data-smoke/
+/data-smoke-unicode/
+collector.log
+*.tmp
+*.temp
+*.bak
